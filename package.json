@@ -1,0 +1,40 @@
+{
+	"name": "@dzeio/template",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "astro dev",
+		"start": "node ./dist/server/entry.mjs",
+		"build": "astro build",
+		"check": "npm run check:astro && npm run check:typescript",
+		"check:astro": "astro check",
+		"check:typescript": "tsc --noEmit",
+		"test": "npm run test:unit && npm run test:e2e",
+		"test:unit": "vitest --coverage --run",
+		"test:e2e": "playwright test",
+		"install:test": "playwright install --with-deps",
+		"lint": "biome check .",
+		"command": "bun run src/commands/index.ts"
+	},
+	"dependencies": {
+		"@astrojs/node": "^8.0.0",
+		"@astrojs/tailwind": "^5",
+		"@dzeio/logger": "^3",
+		"@dzeio/object-util": "^1",
+		"@dzeio/url-manager": "^1",
+		"astro": "^4",
+		"lucide-astro": "^0",
+		"sharp": "^0",
+		"simple-icons-astro": "^13.0.0",
+		"tailwindcss": "^3"
+	},
+	"devDependencies": {
+		"@astrojs/check": "^0",
+		"@biomejs/biome": "^1.7.3",
+		"@playwright/test": "^1",
+		"@types/node": "^20",
+		"@vitest/coverage-v8": "^1",
+		"typescript": "^5",
+		"vitest": "^1"
+	}
+}

@@ -1,0 +1,83 @@
+---
+import { objectOmit } from '@dzeio/object-util'
+interface Props extends Omit<astroHTML.JSX.InputHTMLAttributes, 'type'> {
+	label?: string
+	type?: astroHTML.JSX.InputHTMLAttributes['type'] | 'textarea'
+	block?: boolean
+	suffix?: string
+	prefix?: string
+}
+
+const baseProps = objectOmit(Astro.props, 'label', 'block', 'suffix', 'prefix')
+
+if (baseProps.type === 'textarea') {
+	delete baseProps.type
+}
+---
+
+<!-- input wrapper -->
+<label class:list={['parent', {'w-full': Astro.props.block}]}>
+	{Astro.props.label && (
+		<div class="label">{Astro.props.label}</div>
+	)}
+	<!-- input in itself -->
+	<div class="relative input">
+		{Astro.props.prefix && (
+			<p class="prefix">{Astro.props.prefix}</p>
+		)}
+		{Astro.props.type === 'textarea' && (
+			<textarea class="textarea transition-[min-height]" {...baseProps} />
+		) || (
+			<input {...baseProps as any} />
+		)}
+		{Astro.props.suffix && (
+			<p class="suffix">{Astro.props.suffix}</p>
+		)}
+	</div>
+</label>
+
+<style>
+	.parent {
+		@apply flex flex-col cursor-text gap-2
+	}
+
+	.parent input, .parent textarea {
+		@apply w-full
+	}
+
+	.suffix, .prefix {
+		@apply select-none font-light text-gray-400
+	}
+	.input, .textarea {
+		@apply px-4 w-full bg-gray-100 rounded-lg border-gray-200 min-h-0 border flex items-center gap-2 py-2
+	}
+	.input textarea, .input input {
+		@apply bg-transparent outline-none invalid:border-red-300 placeholder:text-gray-400 placeholder:font-light focus-visible:outline-none
+	}
+	.textarea {
+		@apply overflow-y-hidden
+	}
+</style>
+
+<script>
+	import Component from 'libs/Component'
+
+	function updateHeight(it: HTMLTextAreaElement) {
+		if (!it.style.height) {
+				it.classList.remove('transition-[min-height]')
+				const previous = it.style.minHeight
+				it.style.minHeight = ''
+				const scrollHeight = it.scrollHeight
+				it.style.minHeight = previous
+				setTimeout(() => {
+					it.style.minHeight = `${scrollHeight}px`
+					it.classList.add('transition-[min-height]')
+
+				})
+			}
+	}
+	Component.handle<HTMLTextAreaElement>('textarea', (it) => {
+		updateHeight(it)
+		it.addEventListener('input', () => updateHeight(it))
+	})
+</script>

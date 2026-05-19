@@ -1,0 +1,36 @@
+---
+import { objectOmit } from '@dzeio/object-util'
+
+export interface Props extends astroHTML.JSX.AnchorHTMLAttributes {
+	outline?: boolean
+	ghost?: boolean
+}
+
+const classes = [
+	'button',
+	{ outline: Astro.props.outline },
+	{ ghost: Astro.props.ghost },
+	Astro.props.class
+]
+---
+{'href' in Astro.props && (
+	<a class:list={classes} {...objectOmit(Astro.props, 'type') as any}>
+		<slot />
+	</a>
+) || (
+	<button class:list={classes} {...objectOmit(Astro.props, 'type') as any}>
+		<slot />
+	</button>
+)}
+
+<style>
+	.button {
+		@apply outline-none inline-flex px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-medium transition-colors
+	}
+	.button.outline {
+		@apply bg-transparent border-2 text-amber-500 border-gray-200 hover:bg-gray-100 active:bg-gray-200 active:border-gray-300
+	}
+	.button.ghost {
+		@apply text-black bg-transparent hover:bg-gray-200 active:bg-gray-300
+	}
+</style>

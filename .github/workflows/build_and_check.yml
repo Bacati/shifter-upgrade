@@ -1,0 +1,31 @@
+name: Build, check & Test
+
+on: push
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Use Node.js 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build
+      run: npm run build
+
+    - name: Check
+      run: npm run check
+
+    - name: Prepare Tests
+      run: npm run install:test
+
+    - name: Test
+      run : npm run test

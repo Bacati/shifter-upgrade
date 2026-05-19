@@ -1,0 +1,29 @@
+---
+import { objectOmit } from '@dzeio/object-util'
+interface Props extends Omit<astroHTML.JSX.InputHTMLAttributes, 'type'> {
+	label?: string
+	block?: boolean
+}
+
+const baseProps = objectOmit(Astro.props, 'label', 'block')
+---
+
+<div class:list={[{parent: Astro.props.block}]}>
+	{Astro.props.label && (
+		<label for={Astro.props.name}>{Astro.props.label}</label>
+	)}
+	<input type="range" class="input" {...baseProps as any} />
+</div>
+
+<style>
+	.parent {
+		@apply w-full
+	}
+	input[type='range'] {
+		@apply appearance-none bg-gray-200 rounded-full h-1 w-full
+	}
+	input[type='range']::-webkit-slider-thumb,
+	input[type='range']::-moz-range-thumb {
+		@apply appearance-none bg-amber-600 w-4 h-4 border-0
+	}
+</style>

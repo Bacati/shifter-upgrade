@@ -1,0 +1,137 @@
+---
+import type IconPNG from 'assets/layouts/Head/favicon.png'
+import IconSVG from 'assets/layouts/Head/favicon.svg'
+import Favicon from 'components/layouts/Favicon/Favicon.astro'
+
+export interface Props {
+	/**
+	 * Site display name
+	 */
+	siteName?: string | undefined
+	/**
+	 * Page Title
+	 */
+	title?: string | undefined
+	/**
+	 * Page description
+	 */
+	description?: string | undefined
+	/**
+	 * define the cannonical url
+	 */
+	canonical?: string | false | undefined
+	/**
+	 * OpenGraph image(s)
+	 */
+	image?: typeof IconPNG | Array<typeof IconPNG> | undefined
+	/**
+	 * Twitter/X Specific options
+	 */
+	twitter?: {
+		title?: string | undefined
+		card?: 'summary' | 'summary_large_image' | 'app' | 'player' | undefined
+		site?: string | undefined
+		creator?: string | undefined
+	} | undefined
+	/**
+	 * OpenGraph Specific options (override defaults set by other options)
+	 */
+	og?: {
+		title?: string | undefined
+		type?: string | undefined
+		description?: string | undefined
+		url?: string | undefined
+	} | undefined
+}
+
+const props = Astro.props
+
+const image = props.image ? (Array.isArray(props.image) ? props.image : [props.image]) : undefined
+
+const canonical =
+	typeof Astro.props.canonical === 'string'
+		? Astro.props.canonical
+		: Astro.props.canonical === false
+			? undefined
+			: Astro.url.href
+---
+
+<!-- Charset -->
+<meta charset="UTF-8" />
+
+<!-- Viewport -->
+<meta name="viewport" content="width=device-width" />
+
+
+<!-- Analytics -->
+<script defer data-domain="avior.me" src="/js/script.js"></script>
+
+<!-- Favicon -->
+<Favicon svg={IconSVG} png={IconPNG} icoPath="/favicon.ico" />
+
+<!-- OpenGraph Sitename -->
+{props.siteName && (
+	<meta property="og:site_name" content={props.siteName} />
+)}
+
+<!-- Title -->
+{props.title && (
+	<title>{props.title}</title>
+	// <meta property="twitter:title" content={props.twitter?.title ?? props.title} />
+)}
+
+<!-- Description -->
+{props.description && (
+	<meta name="description" content={props.description} />
+)}
+
+<!-- Canonical -->
+{canonical && (
+	<link rel="canonical" href={canonical} />
+)}
+
+<!-- Twitter -->
+<!-- Twitter Card -->
+<meta property="twitter:card" content={props.twitter?.card ?? 'summary'} />
+
+<!-- Twitter Site -->
+{props.twitter?.site && (
+	<meta property="twitter:site" content={props.twitter.site} />
+)}
+
+<!-- Twitter Creator -->
+{props.twitter?.creator && (
+	<meta property="twitter:creator" content={props.twitter.creator} />
+)}
+
+<!-- Twitter Title -->
+{(props.twitter?.title ?? props.title) && (
+	<meta property="twitter:title" content={props.twitter?.title ?? props.title} />
+)}
+
+<!-- OpenGraph -->
+<!-- OpenGraph Title -->
+{(props.og?.title ?? props.title) && (
+	<meta property="og:title" content={props.og?.title ?? props.title} />
+)}
+
+<!-- OpenGraph Description -->
+{(props.og?.description ?? props.description) && (
+	<meta property="og:description" content={props.og?.description ?? props.description} />
+)}
+
+<!-- OpenGraph Type -->
+<meta property="og:type" content={props.og?.type ?? 'website'} />
+
+<!-- OpenGraph URL -->
+{(props.og?.url ?? canonical) && (
+	<meta property="og:url" content={props.og?.url ?? canonical} />
+)}
+
+<!-- OpenGraph Image -->
+{image?.map((img) => (
+	<meta property="og:image" content={img.src} />
+	<meta property="og:image:type" content={`image/${img.format}`} />
+	<meta property="og:image:width" content={img.width.toString()} />
+	<meta property="og:image:height" content={img.height.toString()} />
+))}

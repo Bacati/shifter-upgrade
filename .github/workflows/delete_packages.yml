@@ -1,0 +1,42 @@
+name: Delete Packages
+
+on:
+  # Run when a PR is closed/merged
+  pull_request:
+    types:
+      - closed
+  # Run when a branch is deleted
+  delete:
+   
+# Configuration for deleting a package
+env:
+  TOKEN: ${{ secrets.DOCKER_TOKEN }}
+  GROUP: avior
+  PACKAGE: template-web-astro
+  TYPE: container
+
+jobs:
+  pull_request:
+    name: Delete the package on a closed Pull Request
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+    - name: Delete package
+      run: |
+        curl --fail -X 'DELETE' "https://git.dzeio.com/api/v1/packages/${GROUP}/${TYPE}/${PACKAGE}/${VERSION}" -H 'accept: application/json' -H "Authorization: token ${TOKEN}"
+      env:
+        # Gitea
+        VERSION: pr-${{ github.event.number }}-head
+        # Github
+        # VERSION: pr-${{ github.event.number }}
+  branch:
+    runs-on: ubuntu-latest
+    name: Delete the package on a deleted branch
+    if: ${{ github.event_name == 'delete' }}
+    steps:
+    - name: Delete package
+      run: |
+        curl --fail -X 'DELETE' "https://git.dzeio.com/api/v1/packages/${GROUP}/${TYPE}/${PACKAGE}/${VERSION}" -H 'accept: application/json' -H "Authorization: token ${TOKEN}"
+      env:
+        VERSION: ${{ github.event.ref }}
+        

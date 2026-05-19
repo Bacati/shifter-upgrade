@@ -1,0 +1,433 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+import { objectFind, objectKeys, objectLoop, objectMap, objectRemap, objectValues } from '@dzeio/object-util'
+import type { ArrayOrObject } from 'cassandra-driver'
+import crypto from 'node:crypto'
+import { Sort, type Query } from '../Query'
+import { filter } from './AdapterUtils'
+import type DaoAdapter from './DaoAdapter'
+import type { DBPull } from './DaoAdapter'
+
+/**
+ * @deprecated need to be moved to the new Schema system
+ *
+ * (won't be done because we mostly won't be using it again...)
+ */
+export default class CassandraAdapter<T extends Schema> implements DaoAdapter<T> {
+
+	private id!: Array<string>
+
+	public constructor(
+		/**
+		 * the schema used by Cassandra
+		 */
+		public readonly schema: Schema<T>,
+		/**
+		 * the table name
+		 */
+		public readonly table: string,
+		/**
+		 * the id(s)
+		 */
+		id?: keyof T | Array<keyof T>,
+
+		/**
+		 * other secondary keys necessary to update data
+		 */
+		private readonly partitionKeys?: Array<keyof T>,
+		/**
+		 * additionnal options to make the adapter work
+		 */
+		public readonly options: {
+			/**
+			 * log the requests made to cassandra
+			 */
+			debug?: boolean
+		} = {}
+	) {
+		if (!id) {
+			objectLoop(schema.model, (value, key) => {
+				if (!isSchemaItem(value)) {
+					return true
+				}
+				if (!value.database?.unique) {
+					return true
+				}
+				id = key
+				return false
+			})
+		} else {
+			this.id = typeof id === 'string' ? [id] : id as Array<string>
+		}
+	}
+
+	// TODO: make it clearer what it does
+	public async create(obj: Partial<Implementation<T>>): Promise<Implementation<T> | null> {
+
+		objectLoop(this.schema.model, (item, key) => {
+			if (isSchemaItem(item) && (item.database?.created || item.database?.updated)) {
+				// @ts-expect-error things get validated anyway
+				obj[key] = new Date()
+			} else if (isSchemaItem(item) && item.database?.auto && !obj[key]) {
+				if (item.type === String) {
+					// @ts-expect-error things get validated anyway
+					obj[key] = crypto.randomBytes(16).toString('hex')
+				} else {
+					// @ts-expect-error things get validated anyway
+					obj[key] = crypto.randomBytes(16).readUint32BE()
+				}
+			}
+		})
+
+		const clone = this.schema.parse(obj)
+		if (!clone) {
+			throw new Error('Invalid data given to create the final object')
+		}
+
+		const keys = objectKeys(clone)
+		const keysStr = keys.join(', ')
+		const values = keys.fill('?').join(', ')
+		const req = `INSERT INTO ${this.table} (${keysStr}) VALUES (${values});`
+		const client = (await Client.get())!
+
+		const params = objectMap(clone as any, (value, key) => this.valueToDB(key as any, value))
+
+		if (this.options?.debug) {
+			console.log(req, params)
+		}
+
+		try {
+			await client.execute(req, params, { prepare: true })
+		} catch (e) {
+			console.log(e, req, params)
+			return null
+		}
+		return this.schema.parse(clone)
+	}
+
+	// eslint-disable-next-line complexity
+	public async read(query?: Query<Implementation<T>> | undefined): Promise<DBPull<T>> {
+		let req: Array<string> = ['SELECT', '*', 'FROM', this.table]
+		const params: ArrayOrObject = []
+
+		// list of the differents items in the WHERE statement
+		const whereItems: Array<string> = []
+		// if ((query?.where?.length ?? 0) > 0 && (query?.where?.length !== 1 || query?.where?.[0]?.[1] !== 'includes')) {
+		// 	for (const it of query?.where ?? []) {
+		// 		// eslint-disable-next-line max-depth
+		// 		switch (it[1]) {
+		// 			case 'in':
+		// 				// eslint-disable-next-line no-case-declarations
+		// 				const arr = it[2] as Array<any>
+
+		// 				whereItems.push(`${String(it[0])} IN (${arr.map(() => '?').join(',')})`)
+		// 				params.push(...arr)
+		// 				break
+
+		// 			case 'equal':
+		// 				whereItems.push(`${String(it[0])} = ?`)
+		// 				params.push(it[2])
+		// 				break
+
+		// 			case 'after':
+		// 				whereItems.push(`${String(it[0])} >= ?`)
+		// 				params.push(it[2])
+		// 				break
+
+		// 			case 'before':
+		// 				whereItems.push(`${String(it[0])} <= ?`)
+		// 				params.push(it[2])
+		// 				break
+		// 		}
+		// 	}
+		// }
+
+		if (whereItems.length > 0) {
+			req.push('WHERE')
+			for (let idx = 0; idx < whereItems.length; idx++) {
+				const item = whereItems[idx] as string
+				if (idx > 0) {
+					req.push('AND')
+				}
+				req.push(item)
+			}
+		}
+
+		// ORDER BY (not working as we want :()
+		// const sort = query?.$sort
+		// if (sort && sort.length >= 1) {
+		// 	const suffix = sort[0]?.[1] === 'asc' ? 'ASC' : 'DESC'
+		// 	req = req.concat(['ORDER', 'BY', sort[0]?.[0] as string, suffix])
+		// }
+
+		// LIMIT (not working because of ORDER BY)
+		// const page: number = query?.page ?? 0
+		// const pageLimit: number | null = query?.limit ?? null
+		// let limit: number | null = null
+		// if (pageLimit && pageLimit > 0) {
+		// 	limit = pageLimit * (page + 1)
+		// 	req = req.concat(['LIMIT', limit.toString()])
+		// }
+
+		// ALLOWW FILTERING
+		req = req.concat(['ALLOW', 'FILTERING'])
+		const client = (await Client.get())!
+
+		if (this.options?.debug) {
+			console.log(req, params)
+		}
+
+		let res: Array<Record<string, any>>
+		try {
+			res = await client.execute(req.join(' '), params)
+		} catch (error) {
+			console.error('error running request')
+			console.error(req, params)
+			throw error
+		}
+		if (!res) {
+			return {
+				rows: 0,
+				pageTotal: 0,
+				page: 1,
+				rowsTotal: 0,
+				data: []
+			}
+		}
+
+		let dataset = res
+			.map((obj) => objectRemap(this.schema.model, (_, key) => ({
+				key,
+				value: this.dbToValue(key, obj[key])
+			})))
+			.map((obj) => {
+				objectLoop(this.schema.model, (item, key) => {
+					if (Array.isArray(item) && !obj[key]) {
+						obj[key] = []
+					}
+				})
+
+				return obj
+			})
+			.map((it) => this.schema.parse(it))
+			.filter((it): it is Implementation<T> => !!it)
+
+		/**
+		 * POST QUERY TREATMENT
+		 */
+		// if ((query?.where?.length ?? 0) > 0) {
+		// 	for (const it of query?.where ?? []) {
+		// 		// eslint-disable-next-line max-depth
+		// 		switch (it[1]) {
+		// 			case 'includes':
+		// 				dataset = dataset.filter((entry) => entry[it[0]]?.toString()?.includes(it[2]))
+		// 				break
+		// 		}
+		// 	}
+		// }
+
+		// sort
+		// const sort = query?.$sort
+		// if (sort) {
+		// 	const sortKey = sort ? sort[0]![0] : objectFind(this.schema.model, (value) => {
+		// 		if (!isSchemaItem(value)) {
+		// 			return false
+		// 		}
+		// 		return !!value.database?.created
+		// 	})
+		// 	const sortValue = sort ? sort[0]![1] : 'asc'
+		// 	if (sortKey && sortValue) {
+		// 		if (sortValue === 'asc') {
+		// 			dataset = dataset.sort((a, b) => b[sortKey as string]! > a[sortKey as string]! ? 1 : -1)
+		// 		} else {
+		// 			dataset = dataset.sort((a, b) => b[sortKey as string]! < a[sortKey as string]! ? 1 : -1)
+		// 		}
+		// 	}
+		// }
+
+		// console.log(res.rows, req)
+		// post request processing
+		// if (limit) {
+		// 	dataset = dataset.slice(page * (query?.limit ?? 0), limit)
+		// }
+
+		// length of the query assuming a single page
+		let unpaginatedLength = dataset.length
+		// temp modification of comportement to use the new and better query system
+		if ((!query || !query?.$sort) && objectFind(this.schema.model, (_, key) => key === 'created')) {
+			// temp fix for the sorting algorithm
+			if (!query) {
+				// @ts-expect-error normal currently
+				query = { $sort: { created: Sort.DESC }}
+			} else {
+				query.$sort = { created: Sort.DESC }
+			}
+		}
+		if (query) {
+			const { filtered, unpaginatedLength: ul } = filter(query, dataset, this.options)
+			dataset = filtered
+			unpaginatedLength = ul
+		}
+
+		// console.log(res)
+		const pageLimit = query?.$limit ?? 10
+		const pageOffset = query?.$offset ?? 0
+		return {
+			rows: dataset.length,
+			rowsTotal: unpaginatedLength,
+			page: Math.floor(pageOffset / pageLimit),
+			pageTotal: Math.max(1, Math.ceil(unpaginatedLength / pageLimit)),
+			data: dataset
+		}
+	}
+
+	public async update(obj: Implementation<T>): Promise<Implementation<T> | null> {
+		return this.patch(obj)
+	}
+
+	public async patch(id: Partial<Implementation<T>>): Promise<Implementation<T> | null>
+	public async patch(id: string, obj: Partial<Implementation<T>>): Promise<Implementation<T> | null>
+	// eslint-disable-next-line complexity
+	public async patch(id: string | Partial<Implementation<T>>, obj?: Partial<Implementation<T>>): Promise<Implementation<T> | null> {
+
+		if (!obj) {
+			if (typeof id === 'string') {
+				return null
+			}
+			obj = {...id} as Partial<Implementation<T>>
+		}
+
+		// update the updated time
+		objectLoop(this.schema.model, (item, key) => {
+			if (isSchemaItem(item) && item.database?.updated) {
+				// @ts-expect-error things get validated anyway
+				obj[key] = new Date()
+			}
+		})
+
+		// build the request parts
+		const parts: Array<string> = ['UPDATE', this.table, 'SET']
+		const params: Array<any> = []
+
+		// remove ids
+		const ids = Array.isArray(this.id) ? this.id : [this.id]
+		for (const tmp of ids) {
+			// eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+			delete obj[tmp]
+		}
+
+		// map the items to update
+		const keys = objectMap(obj as {}, (_, key) => `${key}=?`)
+		parts.push(keys.join(', '))
+		params.push(...objectValues(obj as {}))
+
+		// filter by the ids
+		parts.push('WHERE')
+		const read: Partial<any> = {}
+		for (let idx = 0; idx < ids.length; idx++) {
+			const key = ids[idx] as string
+
+			if (idx > 0) {
+				parts.push('AND')
+			}
+			parts.push(`${key}=?`)
+			const value = obj[key] ?? (typeof id === 'string' ? id : id[key])
+			read[key] = this.valueToDB(key, value)
+			if (!value) {
+				throw new Error(`Missing id (${key})`)
+			}
+			params.push(value)
+		}
+
+		if (this.partitionKeys && this.partitionKeys?.length > 0) {
+			const { data } = await this.read(read)
+			const item = data[0]
+			for (const key of this.partitionKeys) {
+				parts.push('AND', `${key as string}=?`)
+				params.push(this.valueToDB(key, item![key]))
+			}
+		}
+
+		const req = parts.join(' ')
+		const client = await Client.get()
+
+		if (this.options?.debug) {
+			console.log(req, params)
+		}
+
+		try {
+			const res = await client?.execute(req, params)
+			// console.log(res, req)
+			if (this.options?.debug) {
+				console.log('post patch result', res, req)
+			}
+			return (await this.read(read)).data[0] ?? null
+		} catch (e) {
+			console.log(e, req, params)
+		}
+		return null
+	}
+
+	public async delete(obj: Implementation<T>): Promise<boolean> {
+		const parts = ['DELETE', 'FROM', this.table, 'WHERE']
+		const params: ArrayOrObject = []
+
+		objectLoop(obj as {}, (value, key) => {
+			let allowedWheres = ([] as Array<any>).concat(Array.isArray(this.id) ? this.id : [this.id])
+			if (this.partitionKeys) {
+				allowedWheres.push(...this.partitionKeys )
+			}
+			if (!allowedWheres.includes(key)) {
+				return
+			}
+			if (parts.length > 4) {
+				parts.push('AND')
+			}
+			parts.push(`${key}=?`)
+			params.push(value)
+		})
+
+		const client = await Client.get()
+
+		if (this.options?.debug) {
+			console.log(parts, params)
+		}
+
+		try {
+			await client!.execute(parts.join(' '), params)
+		} catch (e) {
+			console.error(e, parts, params)
+			throw e
+		}
+		return true
+	}
+
+	private valueToDB(key: keyof T, value: any): string | number | boolean | Date {
+		const item = this.schema.model[key] as Item
+		const type = isSchemaItem(item) ? item.type : item
+
+		if (typeof type === 'object' && !Array.isArray(type) && !(value instanceof Date)) {
+			return JSON.stringify(value)
+		}
+
+		if (typeof value === 'undefined' || value === null) {
+			return value
+		}
+
+		return value
+	}
+
+	private dbToValue(key: keyof T, value: string | number | boolean | Date): any {
+		const item = this.schema.model[key] as Item
+		const type = isSchemaItem(item) ? item.type : item
+
+		if (typeof type === 'object' && !Array.isArray(type) && !(value instanceof Date)) {
+			return JSON.parse(value as string)
+		}
+
+		if (typeof value === 'undefined' || value === null) {
+			return value
+		}
+
+		return value
+	}
+}

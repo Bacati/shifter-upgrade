@@ -1,0 +1,112 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { generateLicenseKey } from '../utils/drm';
+
+let generatedKey: string | null = null;
+let errorMsg: string | null = null;
+let inputMac = '';
+let inputTier = '0';
+
+// Traitement de la requête POST (quand on soumet le formulaire)
+if (Astro.request.method === 'POST') {
+	try {
+		const data = await Astro.request.formData();
+		inputMac = data.get('mac')?.toString() || '';
+		inputTier = data.get('tier')?.toString() || '0';
+
+		// Validation Regex d'une adresse MAC (ex: A8:42:E3:4A:21:B4)
+		const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+		
+		if (!macRegex.test(inputMac)) {
+			errorMsg = "Format de l'adresse MAC invalide. Exemple requis : A8:42:E3:4A:21:B4";
+		} else {
+			const tierNumber = parseInt(inputTier, 10);
+			generatedKey = generateLicenseKey(inputMac, tierNumber);
+		}
+	} catch (error) {
+		errorMsg = "Une erreur serveur est survenue lors de la génération.";
+	}
+}
+
+const tiers = [
+	{ value: 0, name: 'BASIC (Shifter + Pit Limiter)' },
+	{ value: 1, name: 'TRACK (Basic + Launch Control)' },
+	{ value: 2, name: 'PRO / MotoGP (Track + Predictive Slip Control)' },
+];
+---
+
+<Layout title="Générateur de Licences - Aptatio ECU">
+	<div class="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+		<div class="bg-gray-950 px-8 py-6 border-b border-gray-800 text-center">
+			<h1 class="text-3xl font-black tracking-tight text-white">
+				Aptatio <span class="text-primary-500">ECU</span>
+			</h1>
+			<p class="text-gray-400 mt-2 text-sm">Générateur de licences (DRM) sécurisé</p>
+		</div>
+
+		<div class="p-8">
+			{errorMsg && (
+				<div class="mb-6 p-4 bg-red-900/50 border border-red-800 text-red-200 rounded-lg text-sm">
+					⚠️ {errorMsg}
+				</div>
+			)}
+
+			<form method="POST" class="space-y-6">
+				<div>
+					<label for="mac" class="block text-sm font-medium text-gray-300 mb-2">Adresse MAC du boîtier ESP32</label>
+					<input 
+						type="text" 
+						id="mac" 
+						name="mac" 
+						value={inputMac}
+						placeholder="ex: A8:42:E3:4A:21:B4" 
+						required
+						class="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono placeholder-gray-600 transition-colors uppercase"
+					/>
+				</div>
+
+				<div>
+					<label for="tier" class="block text-sm font-medium text-gray-300 mb-2">Gamme à débloquer</label>
+					<select 
+						id="tier" 
+						name="tier" 
+						class="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+					>
+						{tiers.map((t) => (
+							<option value={t.value} selected={inputTier === t.value.toString()}>
+								Niveau {t.value} : {t.name}
+							</option>
+						))}
+					</select>
+				</div>
+
+				<button 
+					type="submit" 
+					class="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-primary-500/25 transition-all duration-200 mt-4"
+				>
+					Générer la Clé Unique
+				</button>
+			</form>
+
+			{generatedKey && (
+				<div class="mt-8 pt-6 border-t border-gray-800 animate-in fade-in slide-in-from-bottom-4 duration-500">
+					<h3 class="text-sm font-medium text-gray-400 mb-3 text-center">Clé d'activation générée :</h3>
+					<div class="bg-gray-950 border border-primary-500/30 rounded-xl p-6 text-center relative group">
+						<code id="keyDisplay" class="text-4xl font-black text-primary-400 tracking-wider">
+							{generatedKey}
+						</code>
+						<button 
+							onclick="navigator.clipboard.writeText(document.getElementById('keyDisplay').innerText); alert('Clé copiée !')"
+							class="mt-4 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 py-1.5 px-3 rounded inline-flex items-center transition-colors"
+						>
+							📋 Copier la clé
+						</button>
+					</div>
+					<p class="text-center text-xs text-gray-500 mt-4">
+						Cette clé est unique à l'adresse MAC <strong class="text-gray-400 font-mono">{inputMac}</strong>.
+					</p>
+				</div>
+			)}
+		</div>
+	</div>
+</Layout>

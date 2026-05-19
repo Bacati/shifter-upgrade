@@ -1,0 +1,23 @@
+---
+import { getImage } from 'astro:assets'
+
+export interface Props {
+	svg: ImageMetadata
+	png: ImageMetadata
+	icoPath?: string
+}
+
+if (Astro.props.icoPath !== '/favicon.ico') {
+	console.warn('It is recommanded that the ICO file should be located at /favicon.ico')
+}
+
+const appleTouch = await getImage({ src: Astro.props.png, width: 180, height: 180 })
+---
+
+<>
+	<link rel="icon" href={Astro.props.icoPath ?? "/favicon.ico"} sizes="any">
+	<link rel="icon" href={Astro.props.svg.src} type="image/svg+xml">
+	<link rel="apple-touch-icon" href={appleTouch.src} />
+	<!-- Currently not integrated until I find a way to.  -->
+	<!-- <link rel="manifest" href="/site.webmanifest" /> -->
+</>

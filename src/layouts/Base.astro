@@ -1,0 +1,18 @@
+---
+import Head, { type Props as HeadProps } from './Head.astro'
+
+export interface Props extends HeadProps {
+	class?: string
+}
+---
+
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<Head {...Astro.props} />
+		<slot name="head" />
+	</head>
+	<body class:list={["bg-primary-50 dark:bg-slate-950 text-slate-950 dark:text-primary-50", Astro.props.class]}>
+		<slot />
+	</body>
+</html>

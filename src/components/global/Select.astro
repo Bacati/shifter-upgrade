@@ -1,0 +1,103 @@
+---
+import { objectOmit } from '@dzeio/object-util'
+
+export interface Props extends Omit<astroHTML.JSX.InputHTMLAttributes, 'type'> {
+	placeholder?: string
+	label?: string
+	block?: boolean
+	suffix?: string
+	prefix?: string
+	options: Array<string | number | { title: string | number, description?: string | number | null }>
+}
+
+const baseProps = objectOmit(Astro.props, 'label', 'block', 'suffix', 'prefix', 'options')
+---
+
+<!-- input wrapper -->
+<label class:list={['parent', 'select', {'w-full': Astro.props.block}]}>
+	{Astro.props.label && (
+		<div class="label">{Astro.props.label}</div>
+	)}
+	<!-- input in itself -->
+	<div class="relative input">
+		{Astro.props.prefix && (
+			<p class="prefix">{Astro.props.prefix}</p>
+		)}
+		<input readonly {...baseProps as any} />
+		<ul class="list hidden">
+			{Astro.props.options.map((it) => {
+				if (typeof it !== 'object') {
+					it = {title: it}
+				}
+				return (
+					<li data-value={it.title}>
+						<p>{it.title}</p>
+						{it.description && (
+							<p class="desc">{it.description}</p>
+						)}
+					</li>
+				)
+			})}
+		</ul>
+		{Astro.props.suffix && (
+			<p class="suffix">{Astro.props.suffix}</p>
+		)}
+	</div>
+</label>
+
+<style>
+	.parent {
+		@apply flex flex-col cursor-text gap-2
+	}
+
+	.parent input, .parent textarea {
+		@apply w-full
+	}
+
+	.suffix, .prefix {
+		@apply select-none font-light text-gray-400
+	}
+	.input, .textarea {
+		@apply px-4 w-full bg-gray-100 rounded-lg border-gray-200 min-h-0 border flex items-center gap-2 py-2
+	}
+	.input textarea, .input input {
+		@apply bg-transparent outline-none invalid:border-red-300 placeholder:text-gray-400 placeholder:font-light focus-visible:outline-none
+	}
+	.textarea {
+		@apply overflow-y-hidden
+	}
+
+	.list {
+		@apply absolute top-full mt-2 z-10 bg-gray-50 rounded-lg border-1 border-gray-300 overflow-hidden
+	}
+	input:focus + ul {
+		@apply block
+	}
+	li {
+		@apply px-4 py-2 flex flex-col gap-1 hover:bg-gray-100 cursor-pointer
+	}
+	li p {
+		@apply text-gray-600
+	}
+	li p.desc {
+		@apply text-sm font-light
+	}
+</style>
+
+<script>
+	import Component from 'libs/Component'
+
+	Component.handle<HTMLElement>('.select', (it) => {
+		const input = it.querySelector('input')
+		const list = it.querySelector('ul')
+		if (!input || !list) {
+			return
+		}
+		list.querySelectorAll('li').forEach((listItem) => {
+			listItem.addEventListener('pointerdown', () => {
+				input.value = listItem.dataset.value as string
+				input.dispatchEvent(new Event('change'))
+			})
+		})
+	})
+</script>

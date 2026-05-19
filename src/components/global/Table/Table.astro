@@ -1,0 +1,47 @@
+---
+import { objectClone } from '@dzeio/object-util'
+import type TableProps from './TableProps'
+export interface Props extends TableProps {}
+
+const props = objectClone(Astro.props)
+delete props.header
+delete props.data
+---
+<table {...props}>
+	<thead>
+		<tr data-row="0">
+			{Astro.props.header?.map((it, idx) => <th data-cell={idx}>{it}</th>)}
+		</tr>
+	</thead>
+	<tbody>
+		{Astro.props.data?.map((row, rowIdx) => <tr data-row={rowIdx}>{row.map((it, cellIdx) => <td data-cell={cellIdx}>{it}</td>)}</tr>)}
+	</tbody>
+</table>
+
+<style>
+	table {
+		@apply flex w-full flex-col border-1 rounded-lg overflow-clip
+	}
+	table :global(th) {
+		@apply font-medium
+	}
+	table :global(thead),
+	table :global(tbody),
+	table :global(tr) {
+		@apply flex justify-between
+	}
+	table :global(thead),
+	table :global(tbody) {
+		@apply flex-col
+	}
+	table :global(th),
+	table :global(td) {
+		@apply block w-full py-2 px-4 text-right
+	}
+	table :global(tr) {
+		@apply border-gray-200
+	}
+	table :global(thead) {
+		@apply bg-gray-100 border-b-1 border-gray-200
+	}
+</style>

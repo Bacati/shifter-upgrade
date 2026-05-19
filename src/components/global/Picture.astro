@@ -1,0 +1,92 @@
+---
+import { getImage } from 'astro:assets'
+import { objectOmit } from '@dzeio/object-util'
+
+const formats = ['avif', 'webp']
+
+export interface Props extends Omit<astroHTML.JSX.ImgHTMLAttributes, 'src'> {
+	src: ImageMetadata | string
+	srcDark?: ImageMetadata | string
+	width?: number
+	height?: number
+}
+
+type PictureResult = {
+	format: 'new'
+	formats: Array<{ format: string, img: Awaited<ReturnType<typeof getImage>> }>
+	src: Awaited<ReturnType<typeof getImage>>
+} | {
+	format: 'raw'
+	src: string
+}
+
+interface Result {
+	light: PictureResult
+	dark?: PictureResult | undefined
+}
+
+async function resolvePicture(image: ImageMetadata | string): Promise<PictureResult> {
+	const ext = typeof image === 'string' ? image.substring(image.lastIndexOf('.')) : image.format
+	if (ext === 'svg') {
+		return {
+			format: 'raw',
+			src: typeof image === 'string' ? image : image.src
+		}
+	}
+
+	const imageFormats: Array<{ format: string, img: Awaited<ReturnType<typeof getImage>> }> =
+		await Promise.all(
+			formats.map(async (it) => ({
+				img: await getImage({
+					src: Astro.props.src,
+					format: it,
+					width: Astro.props.width,
+					height: Astro.props.height
+				}),
+				format: it
+			}))
+		)
+
+	const orig = await getImage({
+		src: Astro.props.src,
+		format: ext,
+		width: Astro.props.width,
+		height: Astro.props.height
+	})
+
+	return {
+		format: 'new',
+		formats: imageFormats,
+		src: orig
+	}
+}
+
+const res = {
+	light: await resolvePicture(Astro.props.src),
+	dark: Astro.props.srcDark ? await resolvePicture(Astro.props.srcDark) : undefined
+}
+
+const props = objectOmit(Astro.props, 'src', 'srcDark', 'class')
+---
+
+{res.light.format === 'new' && (
+	<picture {...props} {...res.light.src.attributes} class:list={[res.light.src.attributes.class, Astro.props.class, {'dark:hidden': res.dark}]}>
+		{res.light.formats.map((it) => (
+			<source srcset={it.img.src} type={`image/${it.format}`} />
+		))}
+		<img src={res.light.src.src} />
+	</picture>
+) || (
+	<img {...props} class:list={[Astro.props.class, {'dark:hidden': res.dark}]} src={res.light.src as string} />
+)}
+
+{res.dark && res.dark.format === 'new' && (
+	<picture {...props} {...res.dark.src.attributes} class:list={[res.dark.src.attributes.class, Astro.props.class, 'hidden', 'dark:block']}>
+		{res.dark.formats.map((it) => (
+			<source srcset={it.img.src} type={`image/${it.format}`} />
+		))}
+		<img src={res.dark.src.src} />
+	</picture>
+) || (res.dark && (
+	<img {...props} class:list={[Astro.props.class, 'hidden', 'dark:block']} src={res.dark.src as string} />
+))}

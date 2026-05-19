@@ -1,0 +1,26 @@
+---
+const year = new Date().getFullYear()
+
+export interface Props {
+	links?: Array<{ href: string, target?: string, display: string }>
+	socials?: Array<{ href: string, target?: string, icon: any }>
+}
+---
+
+<footer class="w-full flex flex-col bg-white dark:bg-gray-900 mt-32 py-16 px-1 gap-8">
+	{Astro.props.links && (
+		<div class="w-full flex justify-center gap-6">
+			{Astro.props.links.map((it) => (
+				<a href={it.href} target={it.target ?? "_blank noreferrer nofollow"}>{it.display}</a>
+			))}
+		</div>
+	)}
+	{Astro.props.socials && (
+		<div class="flex flex-row w-full justify-center gap-6">
+			{Astro.props.socials.map((it) => (
+				<a href={it.href} target={it.target ?? "_blank noreferrer nofollow"}><it.icon /></a>
+			))}
+		</div>
+	)}
+	<p class="font-light text-center">© {year}&nbsp;<a href="https://www.dzeio.com">Dzeio</a>. Tout droits réservé.</p>
+</footer>

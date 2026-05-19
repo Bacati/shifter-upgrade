@@ -1,0 +1,38 @@
+---
+import { objectMap } from '@dzeio/object-util'
+import Logo from 'assets/components/layouts/Header/logo.svg'
+import Button from 'components/global/Button.astro'
+import Picture from 'components/global/Picture.astro'
+
+export interface Props {
+	right?: Record<string, string>
+	left?: Record<string, string>
+}
+---
+
+<header class="bg-white/1 z-10 justify-center sm:justify-normal transition-opacity
+				fixed w-full h-20 flex items-center border-b border-slate-900/10 backdrop-blur-md">
+	<nav class="container inline-flex w-full gap-6 items-center justify-between">
+		<div class="inline-flex gap-6 items-center">
+			<a href="/">
+				<Picture src={Logo} alt="Website main logo" class="h-12" />
+			</a>
+			{objectMap(Astro.props.left ?? {}, (path, text) => (
+				<div>
+					<Button ghost href={path}>
+						{text}
+					</Button>
+				</div>
+			))}
+		</div>
+		<div class="inline-flex gap-6 items-center">
+			{objectMap(Astro.props.right ?? {}, (path, text) => (
+				<div>
+					<Button ghost href={path}>
+						{text}
+					</Button>
+				</div>
+			))}
+		</div>
+	</nav>
+</header>
